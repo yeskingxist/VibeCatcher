@@ -96,8 +96,11 @@ cd VibeCatcher
 | **Interactive Button Clicker** | Manual Tap | ❌ No | **✅ Automated** |
 | **DM Link Extraction** | Manual Copy-Paste | ❌ No | **✅ Automatic** |
 | **PDF Intelligence Export**| ❌ No | ❌ No | **✅ Automatic** |
-| **Account Safety Guard** | N/A | Low | **✅ High (Human Timing)** |
+| **Account Safety Guard** | N/A | Low | **✅ Organic Delays** *(Alt Account Advised)* |
 | **Data Privacy** | Manual | Cloud Third-Party | **100% Local Execution** |
+
+> [!TIP]
+> 🛡️ **Safety Recommendation:** While VibeCatcher includes built-in human timing guards and auto-cleans trigger comments to keep your account safe, for extra peace of mind we always recommend using a secondary / alt Instagram account when running automated reel engagements.
 
 ---
 
