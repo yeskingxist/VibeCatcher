@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VibeCatcher — Dashboard</title>
+<link rel="icon" type="image/png" href="/static/logo_new.png?v=4">
+<meta property="og:title" content="VibeCatcher Dashboard">
+<meta property="og:description" content="Automated viewing, engagement, DM capture & resource extraction.">
+<meta property="og:image" content="/static/logo_new.png?v=4">
+<meta property="og:type" content="website">
+
+<!-- Fonts: Syne (display) + DM Sans (body) — premium SaaS pairing from Dribbble/Awwwards research -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+<style>
+/* ════════════════════════════════════════════════
+   RESET & ROOT
+════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:         #0A0908;
+  --bg2:        #110F0D;
+  --bg3:        #181412;
+  --terra:      #FF8C42;
+  --terra2:     #FFA066;
+  --terra-glow: rgba(255,140,66,0.30);
+  --sage:       #10B981;
+  --ember:      #F87171;
+  /* Clean, eye-friendly, zero-glare ultra-readable text */
+  --text1:      #F5F5F5;
+  --text2:      #D8D2C9;
+  --text3:      #A8A096;
+  --border:     rgba(240,210,170,0.14);
+  --border2:    rgba(240,210,170,0.28);
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text1);
+  font-family: 'Inter', 'Segoe UI', -apple-system, system-ui, sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+  text-rendering: geometricPrecision;
+}
+
+p, span, h1, h2, h3, a, button, input, label {
+  text-rendering: geometricPrecision;
+}
+
+/* ════════════════════════════════════════════════
+   CANVAS PARTICLE BG — covers full viewport
+   (Research: dev.to particle field, YouTube tutorials)
+════════════════════════════════════════════════ */
+#particleCanvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ════════════════════════════════════════════════
+   CURSOR GLOW — interactive radial gradient
+════════════════════════════════════════════════ */
+#cursorGlow {
+  position: fixed;
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,127,62,0.12) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ════════════════════════════════════════════════
+   MAIN LAYOUT
+════════════════════════════════════════════════ */
+.app-wrapper {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* ════════════════════════════════════════════════
+   HEADER — floating top bar
+════════════════════════════════════════════════ */
+.top-bar {
+  position: fixed;
+  top: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 1400px;
+  z-index: 100;
+  padding: 20px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10,9,8,0.94);
+}
+
+.logo-mark {
+  width: 46px; height: 46px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(212,98,42,0.30));
+  flex-shrink: 0;
+}
+
+.brand-name {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text1);
+}
+
+.brand-tag {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: auto;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ════════════════════════════════════════════════
+   LEFT PANEL
+════════════════════════════════════════════════ */
+.left-panel {
+  width: 62%;
+  padding: 150px 48px 60px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ════════════════════════════════════════════════
+   HERO HEADING — big display text
+════════════════════════════════════════════════ */
+.hero-section {
+  margin-bottom: 8px;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--terra);
+  margin-bottom: 18px;
+  padding: 5px 12px;
+  background: rgba(212,98,42,0.08);
+  border: 1px solid rgba(212,98,42,0.18);
+  border-radius: 100px;
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 5px; height: 5px;
+  background: var(--terra);
+  border-radius: 50%;
+  animation: pulseOrb 2s ease-in-out infinite;
+}
+
+@keyframes pulseOrb {
+  0%,100% { box-shadow: 0 0 0 0 rgba(212,98,42,0.4); }
+  50%      { box-shadow: 0 0 0 4px rgba(212,98,42,0); }
+}
+
+.hero-title {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: clamp(38px, 5vw, 58px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--text1);
+  margin-bottom: 14px;
+}
+
+.hero-title .accent-word {
+  color: var(--terra);
+  position: relative;
+  display: inline-block;
+}
+
+/* Animated underline on accent word */
+.hero-title .accent-word::after {
+  content: '';
+  position: absolute;
+  bottom: 2px; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--terra), var(--terra2));
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: lineGrow 1s cubic-bezier(0.16,1,0.3,1) 0.5s forwards;
+}
+
+@keyframes lineGrow {
+  to { transform: scaleX(1); }
+}
+
+.hero-sub {
+  font-size: 15.5px;
+  color: var(--text2);
+  line-height: 1.65;
+  max-width: 520px;
+  font-weight: 500;
+}
+
+/* ════════════════════════════════════════════════
+   3D TILT CARD — Research: frontend.fyi, effect-labs.com
+   CSS perspective + JS mousemove = premium 3D depth
+════════════════════════════════════════════════ */
+.tilt-wrapper {
+  position: relative;
+}
+
+/* ════════════════════════════════════════════════
+   MAGNIFYING GLASS LENS EFFECT — text & cards bulge out under cursor
+════════════════════════════════════════════════ */
+.magnify-text {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), text-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.magnify-text:hover {
+  transform: scale(1.05);
+  text-shadow: 0 0 15px rgba(255, 127, 62, 0.35);
+}
+
+.tilt-card {
+  position: relative;
+  background: rgba(18,15,12,0.55);
+  border: 1px solid rgba(240,210,170,0.12);
+  border-radius: 22px;
+  padding: 28px;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+
+.tilt-card:hover {
+  border-color: rgba(240, 210, 170, 0.22);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.50);
+}
+
+.tilt-card::before {
+  /* Top highlight rim — "glass" effect */
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240,210,170,0.10), transparent);
+  pointer-events: none;
+}
+
+/* Dynamic glare layer — moves with mouse */
+.tilt-card .glare {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(circle at 50% 50%, rgba(255,230,200,0.05) 0%, transparent 60%);
+  z-index: 0;
+}
+
+.tilt-card:hover .glare { opacity: 1; }
+
+.tilt-card-content { position: relative; z-index: 1; }
+
+/* Inner card glow corner */
+.card-corner-glow {
+  position: absolute;
+  top: 0; right: 0;
+  width: 180px; height: 180px;
+  background: radial-gradient(ellipse at top right, rgba(212,98,42,0.05) 0%, transparent 65%);
+  pointer-events: none;
+  transform: translate(20%, -20%);
+  border-radius: 50%;
+}
+
+/* ════════════════════════════════════════════════
+   ACCOUNT STATUS CARD
+════════════════════════════════════════════════ */
+.status-card {
+  background: rgba(18,15,12,0.55);
+  border: 1px solid rgba(240,210,170,0.12);
+  border-radius: 22px;
+  padding: 24px 28px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s ease;
+}
+
+.status-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240,210,170,0.22), transparent);
+}
+
+.status-card:hover { border-color: var(--border2); }
+
+.label-xs {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.account-name-text {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text1);
+  letter-spacing: -0.02em;
+}
+
+/* ════════════════════════════════════════════════
+   BADGES
+════════════════════════════════════════════════ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 100px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.badge-on  { background: rgba(110,155,82,0.10); border: 1px solid rgba(110,155,82,0.24); color: var(--sage); }
+.badge-off { background: rgba(192,69,58,0.10);  border: 1px solid rgba(192,69,58,0.24);  color: var(--ember); }
+
+.badge-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot-on  { background: var(--sage);  box-shadow: 0 0 5px var(--sage); animation: dotPulse 2.4s ease-in-out infinite; }
+.dot-off { background: var(--ember); }
+
+@keyframes dotPulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* ════════════════════════════════════════════════
+   BUTTONS — 3D lift + shine sweep
+   (Research: prismic.io, joshwcomeau.com)
+════════════════════════════════════════════════ */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--terra);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 22px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1),
+              box-shadow 0.25s ease,
+              background 0.2s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.20),
+    0 1px 3px rgba(0,0,0,0.30),
+    0 4px 12px rgba(212,98,42,0.22);
+  will-change: transform;
+}
+
+/* Shine sweep */
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 70%;
+  height: 100%;
+  background: linear-gradient(110deg, transparent, rgba(255,255,255,0.25), transparent);
+  transition: left 0.60s cubic-bezier(0.25,0.46,0.45,0.94);
+  pointer-events: none;
+}
+
+.btn-primary:hover {
+  background: var(--terra2);
+  transform: translateY(-3px) scale(1.01);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.20),
+    0 8px 30px rgba(212,98,42,0.38),
+    0 2px 6px rgba(0,0,0,0.20);
+}
+
+.btn-primary:hover::before { left: 130%; }
+.btn-primary:active { transform: translateY(-1px) scale(1.00); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+.btn-primary:disabled::before { display: none; }
+
+.btn-secondary {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(240,210,160,0.05);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 15px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(110deg, transparent, rgba(255,255,255,0.06), transparent);
+  transition: left 0.45s ease;
+  pointer-events: none;
+}
+
+.btn-secondary:hover {
+  background: rgba(240,210,160,0.09);
+  border-color: var(--border2);
+  color: var(--text1);
+  transform: translateY(-1px);
+}
+.btn-secondary:hover::before { left: 130%; }
+.btn-secondary:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+/* ════════════════════════════════════════════════
+   FORM INPUTS
+════════════════════════════════════════════════ */
+.field-group { display: flex; flex-direction: column; gap: 8px; }
+
+.field-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid rgba(240,210,170,0.40);
+  outline: none;
+  color: #FFFFFF;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 0;
+  width: 100%;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.field-input:focus {
+  border-bottom-color: var(--terra);
+  box-shadow: 0 2px 0 -1px rgba(212,98,42,0.30);
+}
+
+.field-input::placeholder { color: rgba(255,255,255,0.72); font-style: normal; }
+
+/* ════════════════════════════════════════════════
+   PROGRESS BAR
+════════════════════════════════════════════════ */
+.prog-track {
+  background: rgba(240,210,170,0.07);
+  border-radius: 100px;
+  overflow: hidden;
+  height: 3px;
+}
+
+.prog-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--terra), var(--terra2), #F5A97A);
+  border-radius: 100px;
+  box-shadow: 0 0 10px rgba(212,98,42,0.50);
+  transition: width 0.55s cubic-bezier(0.4,0,0.2,1);
+  position: relative;
+}
+
+/* Animated shimmer on progress bar */
+.prog-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.40), transparent);
+  animation: progShimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes progShimmer {
+  0%   { left: -100%; }
+  100% { left: 200%;  }
+}
+
+/* ════════════════════════════════════════════════
+   RESULT CARD
+════════════════════════════════════════════════ */
+.result-card {
+  background: rgba(110,155,82,0.07);
+  border: 1px solid rgba(110,155,82,0.20);
+  border-radius: 18px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: cardFlyIn 0.5s cubic-bezier(0.16,1,0.3,1) both;
+}
+
+@keyframes cardFlyIn {
+  from { opacity:0; transform: translateY(16px) scale(0.97); }
+  to   { opacity:1; transform: translateY(0)    scale(1);    }
+}
+
+/* ════════════════════════════════════════════════
+   RIGHT PANEL — History Sidebar
+════════════════════════════════════════════════ */
+.right-panel {
+  width: 38%;
+  border-left: 1px solid var(--border);
+  background: rgba(255,200,140,0.012);
+  padding: 120px 32px 60px 36px;
+  overflow-y: auto;
+  max-height: 100vh;
+  position: sticky;
+  top: 0;
+}
+
+.right-panel::-webkit-scrollbar { width: 3px; }
+.right-panel::-webkit-scrollbar-track { background: transparent; }
+.right-panel::-webkit-scrollbar-thumb { background: rgba(240,210,170,0.07); border-radius: 3px; }
+.right-panel::-webkit-scrollbar-thumb:hover { background: rgba(240,210,170,0.15); }
+
+/* ════════════════════════════════════════════════
+   HISTORY ITEMS — 3D tilt effect applied via JS
+════════════════════════════════════════════════ */
+.hist-item {
+  background: rgba(18,15,12,0.55);
+  border: 1px solid rgba(240,210,170,0.14);
+  border-radius: 18px;
+  padding: 20px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  animation: histSlideIn 0.35s cubic-bezier(0.16,1,0.3,1) forwards;
+  backface-visibility: hidden;
+}
+
+@keyframes histSlideIn {
+  0%   { opacity:0; transform: translateX(18px); }
+  99%  { opacity:1; transform: translateX(0);    }
+  100% { opacity:1; transform: none;             }
+}
+
+.hist-item::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(240,210,170,0.22), transparent);
+}
+
+.hist-item:hover {
+  background: rgba(22, 18, 15, 0.70);
+  border-color: rgba(240, 210, 170, 0.22);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+}
+
+.resource-link-pill {
+  font-family: 'Inter', sans-serif;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  padding: 11px 15px;
+  border-radius: 11px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+}
+
+.resource-link-pill:hover {
+  background: rgba(16, 185, 129, 0.20);
+  border-color: rgba(16, 185, 129, 0.75);
+  box-shadow: 0 4px 18px rgba(16, 185, 129, 0.25);
+}
+
+.del-btn {
+  position: absolute;
+  top: 12px; right: 12px;
+  background: none; border: none;
+  cursor: pointer;
+  color: var(--text3);
+  line-height: 1;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+}
+.hist-item:hover .del-btn { opacity: 1; }
+.del-btn:hover { color: var(--ember); }
+
+/* ════════════════════════════════════════════════
+   FLOATING STATS PILLS — decorative UI elements
+════════════════════════════════════════════════ */
+.stats-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  background: rgba(240,210,160,0.08);
+  border: 1px solid rgba(240,210,170,0.28);
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #FFFFFF;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+.stat-pill:hover {
+  background: rgba(240,210,160,0.14);
+  border-color: rgba(240,210,170,0.45);
+  color: #FFFFFF;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.stat-pill .mat-icon {
+  font-size: 15px;
+  color: var(--terra);
+}
+
+/* ════════════════════════════════════════════════
+   ANIMATED CONNECT PROMPT
+════════════════════════════════════════════════ */
+.connect-prompt {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 20px;
+}
+
+/* ════════════════════════════════════════════════
+   SECTION DIVIDERS
+════════════════════════════════════════════════ */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.section-header-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ════════════════════════════════════════════════
+   FLOAT ANIMATION — decorative background elements
+════════════════════════════════════════════════ */
+@keyframes floatY {
+  0%,100% { transform: translateY(0px);   }
+  50%      { transform: translateY(-8px); }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes fadeSlideUp {
+  0%   { opacity:0; transform: translateY(16px); }
+  99%  { opacity:1; transform: translateY(0);    }
+  100% { opacity:1; transform: none;             }
+}
+
+.animate-in { animation: fadeSlideUp 0.6s cubic-bezier(0.16,1,0.3,1) forwards; }
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+
+/* ════════════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════════════ */
+@media (max-width: 1024px) {
+  .app-wrapper    { flex-direction: column; }
+  .left-panel     { width: 100%; padding: 110px 24px 40px; }
+  .right-panel    { width: 100%; max-height: none; border-left: none; border-top: 1px solid var(--border); padding: 40px 24px; position: static; }
+  .top-bar        { padding: 16px 24px; }
+  .hero-title     { font-size: clamp(30px, 7vw, 44px); }
+}
+
+/* ════════════════════════════════════════════════
+   SPINNER
+════════════════════════════════════════════════ */
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.12);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ════════════════════════════════════════════════
+   SELECTION
+════════════════════════════════════════════════ */
+::selection { background: rgba(212,98,42,0.28); color: #FFF0E5; }
+</style>
+</head>
+
+<body>
+<!-- ── Cursor Glow ── -->
+<div id="cursorGlow"></div>
+
+<!-- ── Particle Canvas ── -->
+<canvas id="particleCanvas"></canvas>
+
+<!-- ── Top Bar ── -->
+<header class="top-bar">
+  <img src="/static/logo_new.png?v=4" alt="VibeCatcher" class="logo-mark">
+  <span class="brand-name">VibeCatcher</span>
+  <span class="brand-tag">Reel Intelligence</span>
+</header>
+
+<!-- ── App ── -->
+<div class="app-wrapper">
+
+  <!-- ═══════════════════════════
+       LEFT: Main Panel
+  ═══════════════════════════ -->
+  <main class="left-panel">
+
+    <!-- Hero -->
+    <div class="hero-section animate-in">
+      <div class="hero-eyebrow">Instagram Automation Engine</div>
+      <h1 class="hero-title">
+        Automate Reel Comments,<br>
+        Extract <span class="accent-word">DM Links.</span>
+      </h1>
+      <p class="hero-sub">
+        VibeCatcher automatically connects to Instagram Reels, posts your trigger keyword, captures automated DM responses from creators, extracts hidden resource links (Google Drive, PDFs, landing pages), and generates downloadable intelligence PDF reports.
+      </p>
+    </div>
+
+    <!-- Stats Pills -->
+    <div class="stats-row animate-in delay-1">
+      <div class="stat-pill">
+        <span class="material-symbols-outlined mat-icon">bolt</span>
+        Instant Pipeline
+      </div>
+      <div class="stat-pill">
+        <span class="material-symbols-outlined mat-icon">shield</span>
+        Session-Safe
+      </div>
+      <div class="stat-pill">
+        <span class="material-symbols-outlined mat-icon">picture_as_pdf</span>
+        PDF Export
+      </div>
+    </div>
+
+    <!-- Account Status -->
+    <div class="status-card animate-in delay-2">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;">
+        <div>
+          <p class="label-xs">Connected Account</p>
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px;">
+            <img id="userAvatar" src="" alt="Profile" style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--terra);display:none;background:#201C18;">
+            <span class="account-name-text" id="accountName">Checking…</span>
+            <div id="accountBadge" class="badge badge-off">
+              <span class="badge-dot dot-off"></span>
+              Offline
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; flex-shrink:0;">
+          <button type="button" id="refreshAuthBtn" class="btn-secondary" title="Re-check active Instagram session status">
+            <span class="material-symbols-outlined" style="font-size:15px;">refresh</span>
+            Refresh Connection
+          </button>
+          <button type="button" id="disconnectAuthBtn" class="btn-secondary" style="display:none;"
+            onmouseover="this.style.color='var(--ember)';this.style.borderColor='rgba(192,69,58,0.3)';this.style.background='rgba(192,69,58,0.08)'"
+            onmouseout="this.style.color='';this.style.borderColor='';this.style.background=''">
+            Disconnect Account
+          </button>
+        </div>
+      </div>
+
+      <!-- Explanatory Subtitle -->
+      <p style="font-size: 13px; color: var(--text3); margin-top: 12px; line-height: 1.5; font-weight: 500;">
+        Active Instagram browser session used to safely view reels, capture DMs, and extract resource links in real-time.
+      </p>
+
+      <!-- Connect Prompt -->
+      <div id="connectPrompt" class="connect-prompt" style="display:none;">
+        <button type="button" id="connectAccountBtn" class="btn-primary" style="width:100%;">
+          <span class="material-symbols-outlined" style="font-size:17px;">login</span>
+          Connect Instagram Account
+        </button>
+        <div id="connectStatus" style="display:none; margin-top:16px;">
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+            <div class="spinner" id="connectSpinner"></div>
+            <span id="connectStatusText" style="font-size:13px; color:var(--text2); font-style:italic;">Launching browser…</span>
+          </div>
+          <div class="prog-track">
+            <div class="prog-fill" id="connectProgressBar" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D Pipeline Form Card -->
+    <div class="tilt-wrapper animate-in delay-3" id="formTiltWrapper">
+      <div class="tilt-card" id="formTiltCard">
+        <div class="card-corner-glow"></div>
+        <div class="glare" id="formGlare"></div>
+        <div class="tilt-card-content">
+
+          <p class="label-xs" style="margin-bottom:24px;">Pipeline Configuration</p>
+
+          <form id="harvestForm" style="display:flex; flex-direction:column; gap:28px;">
+            <div class="field-group">
+              <label for="reelUrl" class="label-xs">Reel URL</label>
+              <input type="text" id="reelUrl" class="field-input"
+                placeholder="https://www.instagram.com/reel/C12345/" required/>
+            </div>
+            <div class="field-group">
+              <label for="commentText" class="label-xs">Trigger Keyword</label>
+              <input type="text" id="commentText" class="field-input"
+                value="link" placeholder="Comment to trigger DM" required/>
+            </div>
+            <button type="submit" id="submitBtn" class="btn-primary" style="width:100%; padding:15px;">
+              <span class="material-symbols-outlined" style="font-size:18px;">rocket_launch</span>
+              Launch Pipeline
+            </button>
+          </form>
+
+          <!-- Progress -->
+          <div id="progressBox" style="display:none; margin-top:24px; display:none;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+              <div class="spinner"></div>
+              <span id="statusText" class="label-xs" style="letter-spacing:0.07em;">Initializing…</span>
+            </div>
+            <div class="prog-track">
+              <div class="prog-fill" id="progressBar" style="width:0%"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Result Card -->
+    <div id="resultCard" class="result-card animate-in" style="display:none;">
+      <div style="position:absolute;top:0;right:0;width:130px;height:130px;background:radial-gradient(ellipse at top right,rgba(110,155,82,0.12) 0%,transparent 65%);pointer-events:none;transform:translate(25%,-25%);border-radius:50%;"></div>
+      <div style="display:flex; align-items:flex-start; gap:16px; position:relative; z-index:1;">
+        <div style="background:rgba(110,155,82,0.15);border-radius:50%;padding:9px;flex-shrink:0;">
+          <span class="material-symbols-outlined" style="font-size:22px;color:var(--sage);font-variation-settings:'FILL' 1;">check_circle</span>
+        </div>
+        <div style="flex:1;">
+          <h3 style="font-family:'Syne',sans-serif; font-size:18px; font-weight:700; color:var(--sage); letter-spacing:-0.02em; margin-bottom:5px;">
+            Extraction Complete
+          </h3>
+          <p id="creatorText" style="font-size:13px; color:var(--text2); margin-bottom:18px; line-height:1.6; font-style:italic;">
+            Resources extracted and PDF generated.
+          </p>
+          <a id="downloadBtn" href="#" target="_blank" class="btn-secondary"
+            onmouseover="this.style.color='var(--sage)';this.style.borderColor='rgba(110,155,82,0.3)';this.style.background='rgba(110,155,82,0.08)'"
+            onmouseout="this.style.color='';this.style.borderColor='';this.style.background=''">
+            <span class="material-symbols-outlined" style="font-size:15px;">download</span>
+            Download PDF
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════
+       RIGHT: History Sidebar
+  ═══════════════════════════ -->
+  <aside class="right-panel">
+    <div class="section-header">
+      <p class="label-xs">Session History</p>
+      <div class="section-header-line"></div>
+    </div>
+
+    <div id="historyList">
+      <div style="text-align:center; padding:60px 0; color:var(--text3); font-size:13px; font-style:italic;">
+        No harvested reels yet.
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- ════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────────
+   1. CANVAS PARTICLE SYSTEM
+   Research source: dev.to, YouTube (Franks Laboratory)
+   — Vanilla JS, requestAnimationFrame, connection lines
+───────────────────────────────────────────────────── */
+(function initParticles() {
+  const canvas = document.getElementById('particleCanvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, particles = [], mouse = { x: null, y: null };
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', () => { resize(); });
+
+  window.addEventListener('mousemove', e => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  class Particle {
+    constructor() { this.reset(true); }
+    reset(initial) {
+      this.x  = Math.random() * W;
+      this.y  = Math.random() * H;
+      this.r  = Math.random() * 1.4 + 0.4;
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 0.4636 + 0.25755;
+      this.baseVx = Math.cos(angle) * speed;
+      this.baseVy = Math.sin(angle) * speed;
+      this.vx = this.baseVx;
+      this.vy = this.baseVy;
+      this.a  = Math.random() * 0.5 + 0.15;
+    }
+    update() {
+      if (mouse.x !== null) {
+        const dx = mouse.x - this.x;
+        const dy = mouse.y - this.y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 160) {
+          const force = (1 - d / 160) * 0.51;
+          this.vx += (dx / d) * force;
+          this.vy += (dy / d) * force;
+        }
+      }
+
+      /* Continuously maintain active base motion — never slows to a standstill */
+      this.vx += (this.baseVx - this.vx) * 0.0404;
+      this.vy += (this.baseVy - this.vy) * 0.0404;
+
+      this.x += this.vx;
+      this.y += this.vy;
+
+      /* Seamless edge wrapping */
+      if (this.x < -10) this.x = W + 10;
+      if (this.x > W + 10) this.x = -10;
+      if (this.y < -10) this.y = H + 10;
+      if (this.y > H + 10) this.y = -10;
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(212,120,60,${this.a})`;
+      ctx.fill();
+    }
+  }
+
+  /* Shooting Star / Falling Line effect */
+  class ShootingStar {
+    constructor() { this.reset(); }
+    reset() {
+      this.x = Math.random() * (W + 200);
+      this.y = Math.random() * (H * 0.5) - 100;
+      this.len = Math.random() * 90 + 70;
+      this.speed = Math.random() * 7 + 5;
+      this.size = Math.random() * 1.5 + 0.8;
+      this.waitTime = Math.floor(Math.random() * 180 + 40);
+      this.active = false;
+    }
+    update() {
+      if (!this.active) {
+        this.waitTime--;
+        if (this.waitTime <= 0) this.active = true;
+        return;
+      }
+      this.x -= this.speed;
+      this.y += this.speed * 0.65;
+      if (this.x < -this.len || this.y > H + this.len) {
+        this.reset();
+      }
+    }
+    draw() {
+      if (!this.active) return;
+      const tailX = this.x + this.len;
+      const tailY = this.y - this.len * 0.65;
+      const grad = ctx.createLinearGradient(this.x, this.y, tailX, tailY);
+      grad.addColorStop(0, 'rgba(240, 160, 90, 0.85)');
+      grad.addColorStop(0.25, 'rgba(212, 98, 42, 0.40)');
+      grad.addColorStop(1, 'rgba(212, 98, 42, 0)');
+
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(tailX, tailY);
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = this.size;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * 1.1, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 230, 200, 0.95)';
+      ctx.fill();
+    }
+  }
+
+  /* Create 344 particles + 4 shooting stars */
+  for (let i = 0; i < 344; i++) particles.push(new Particle());
+  const shootingStars = [new ShootingStar(), new ShootingStar(), new ShootingStar(), new ShootingStar()];
+
+  function connectParticles() {
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const d  = Math.sqrt(dx*dx + dy*dy);
+        if (d < 130) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(212,100,42,${0.045 * (1 - d / 130)})`;
+          ctx.lineWidth   = 0.8;
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function loop() {
+    ctx.clearRect(0, 0, W, H);
+    particles.forEach(p => { p.update(); p.draw(); });
+    connectParticles();
+    shootingStars.forEach(s => { s.update(); s.draw(); });
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+(function initCursorGlow() {
+  const glow = document.getElementById('cursorGlow');
+  if (!glow) return;
+
+  document.addEventListener('mousemove', e => {
+    glow.style.transform = `translate3d(${e.clientX - 120}px, ${e.clientY - 120}px, 0)`;
+  });
+})();
+
+/* ─────────────────────────────────────────────────────
+   3. 3D CARD TILT — CSS perspective + JS mousemove
+   Research: frontend.fyi, effect-labs.com, GitHub
+───────────────────────────────────────────────────── */
+(function initTilt() {
+  function addTilt(wrapper, card, glareEl) {
+    wrapper.addEventListener('mousemove', e => {
+      const { left, top, width, height } = wrapper.getBoundingClientRect();
+      const mx = e.clientX - left - width  / 2;
+      const my = e.clientY - top  - height / 2;
+      const rotY =  (mx / width)  * 16;
+      const rotX = -(my / height) * 16;
+      card.style.transform = `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.015)`;
+      card.style.boxShadow = `0 24px 60px rgba(0,0,0,0.50)`;
+      /* Subtle glare follows cursor */
+      if (glareEl) {
+        const gx = ((e.clientX - left) / width)  * 100;
+        const gy = ((e.clientY - top)  / height) * 100;
+        glareEl.style.background = `radial-gradient(circle at ${gx}% ${gy}%, rgba(255,230,200,0.05) 0%, transparent 55%)`;
+      }
+    });
+    wrapper.addEventListener('mouseleave', () => {
+      card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale(1)`;
+      card.style.boxShadow = '';
+      if (glareEl) glareEl.style.background = '';
+    });
+  }
+
+  const fw = document.getElementById('formTiltWrapper');
+  const fc = document.getElementById('formTiltCard');
+  const fg = document.getElementById('formGlare');
+  if (fw && fc) addTilt(fw, fc, fg);
+})();
+
+/* ─────────────────────────────────────────────────────
+   4. HISTORY ITEM TILT — full 3D tilt depth
+───────────────────────────────────────────────────── */
+function addMiniTilt(el) {
+  el.addEventListener('mousemove', e => {
+    const { left, top, width, height } = el.getBoundingClientRect();
+    const mx = e.clientX - left - width / 2;
+    const my = e.clientY - top - height / 2;
+    const rotY =  (mx / width)  * 10;
+    const rotX = -(my / height) * 10;
+    el.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.01)`;
+    el.style.boxShadow = '0 12px 36px rgba(0,0,0,0.40)';
+  });
+  el.addEventListener('mouseleave', () => {
+    el.style.transform = '';
+    el.style.boxShadow = '';
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   5. APP LOGIC
+───────────────────────────────────────────────────── */
+const accountName     = document.getElementById('accountName');
+const accountBadge    = document.getElementById('accountBadge');
+const form            = document.getElementById('harvestForm');
+const submitBtn       = document.getElementById('submitBtn');
+const progressBox     = document.getElementById('progressBox');
+const progressBar     = document.getElementById('progressBar');
+const statusText      = document.getElementById('statusText');
+const resultCard      = document.getElementById('resultCard');
+const creatorText     = document.getElementById('creatorText');
+const downloadBtn     = document.getElementById('downloadBtn');
+const disconnectBtn   = document.getElementById('disconnectAuthBtn');
+const refreshAuthBtn  = document.getElementById('refreshAuthBtn');
+const connectPrompt   = document.getElementById('connectPrompt');
+const connectBtn      = document.getElementById('connectAccountBtn');
+const connectStatus   = document.getElementById('connectStatus');
+const connectStatusTx = document.getElementById('connectStatusText');
+const connectProg     = document.getElementById('connectProgressBar');
+const historyList     = document.getElementById('historyList');
+
+const userAvatar      = document.getElementById('userAvatar');
+
+async function checkAuthStatus() {
+  try {
+    const res  = await fetch('/api/auth-status');
+    const data = await res.json();
+    if (data.authenticated) {
+      if (data.username && data.username !== 'Connected') {
+        accountName.textContent = `@${data.username}`;
+        userAvatar.src = `/api/creator-avatar/${encodeURIComponent(data.username)}`;
+        userAvatar.style.display = 'inline-block';
+      } else {
+        accountName.textContent = 'Connected';
+        userAvatar.style.display = 'none';
+      }
+      accountBadge.className  = 'badge badge-on';
+      accountBadge.innerHTML  = '<span class="badge-dot dot-on"></span>Connected';
+      disconnectBtn.style.display = 'inline-flex';
+      connectPrompt.style.display = 'none';
+    } else {
+      accountName.textContent = 'No Session';
+      userAvatar.style.display = 'none';
+      accountBadge.className  = 'badge badge-off';
+      accountBadge.innerHTML  = '<span class="badge-dot dot-off"></span>Offline';
+      disconnectBtn.style.display = 'none';
+      connectPrompt.style.display = 'block';
+    }
+  } catch (e) { console.error(e); }
+}
+
+disconnectBtn.addEventListener('click', async () => {
+  if (!confirm('Disconnect this Instagram account?')) return;
+  try {
+    const res  = await fetch('/api/disconnect', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    checkAuthStatus();
+  } catch (e) { alert('Error: ' + e.message); }
+});
+
+refreshAuthBtn.addEventListener('click', async () => {
+  refreshAuthBtn.disabled = true;
+  refreshAuthBtn.innerHTML = '<div class="spinner" style="width:13px;height:13px;border-width:1.5px;"></div> Checking connection…';
+  await checkAuthStatus();
+  refreshAuthBtn.disabled = false;
+  refreshAuthBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:15px;">refresh</span> Refresh Connection';
+});
+
+connectBtn.addEventListener('click', async () => {
+  connectBtn.disabled = true;
+  connectBtn.innerHTML = '<div class="spinner"></div> Launching…';
+  connectStatus.style.display = 'block';
+  connectStatusTx.textContent = 'Launching browser…';
+  connectProg.style.width = '10%';
+
+  try {
+    const res  = await fetch('/api/connect-browser', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    const id = data.task_id;
+    const iv = setInterval(async () => {
+      try {
+        const sr = await fetch(`/api/task-status/${id}`);
+        const sd = await sr.json();
+        connectStatusTx.textContent  = sd.message || 'Working…';
+        connectProg.style.width      = `${sd.percentage || 0}%`;
+        if (sd.status === 'success') {
+          clearInterval(iv);
+          connectStatus.style.display = 'none';
+          connectBtn.disabled = false;
+          connectBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:17px;">login</span> Connect Instagram Account';
+          checkAuthStatus();
+        } else if (sd.status === 'failed') {
+          clearInterval(iv);
+          connectStatusTx.textContent = '✕ ' + (sd.error || 'Failed');
+          connectBtn.disabled = false;
+          connectBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:17px;">login</span> Connect Instagram Account';
+          connectProg.style.width = '0%';
+        }
+      } catch (e) { console.error(e); }
+    }, 1500);
+  } catch (e) {
+    connectStatusTx.textContent = '✕ ' + e.message;
+    connectBtn.disabled = false;
+    connectBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:17px;">login</span> Connect Instagram Account';
+  }
+});
+
+checkAuthStatus();
+
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const reelUrl = document.getElementById('reelUrl').value.trim();
+  const kw      = document.getElementById('commentText').value.trim();
+  if (!reelUrl || !kw) return;
+
+  submitBtn.disabled        = true;
+  progressBox.style.display = 'block';
+  resultCard.style.display  = 'none';
+  progressBar.style.width   = '5%';
+  statusText.textContent    = 'Starting…';
+
+  try {
+    const res  = await fetch('/api/process-reel', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ reel_url: reelUrl, comment_text: kw })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Pipeline failed');
+    pollTask(data.task_id);
+  } catch (e) {
+    alert('Error: ' + e.message);
+    submitBtn.disabled        = false;
+    progressBox.style.display = 'none';
+  }
+});
+
+async function pollTask(id) {
+  const iv = setInterval(async () => {
+    try {
+      const res  = await fetch(`/api/task-status/${id}`);
+      const data = await res.json();
+      progressBar.style.width = `${data.percentage}%`;
+      statusText.textContent  = data.message;
+      if (data.status === 'success') {
+        clearInterval(iv);
+        submitBtn.disabled        = false;
+        progressBox.style.display = 'none';
+        resultCard.style.display  = 'block';
+        creatorText.textContent   = `Creator: @${data.result.creator} | Extracted ${data.result.extracted_urls.length} link(s)`;
+        downloadBtn.href          = data.result.download_url + '?t=' + Date.now();
+        fetchHistory();
+      } else if (data.status === 'failed') {
+        clearInterval(iv);
+        alert('Failed: ' + data.error);
+        submitBtn.disabled        = false;
+        progressBox.style.display = 'none';
+      }
+    } catch (e) { console.error(e); }
+  }, 1500);
+}
+
+async function fetchHistory() {
+  try {
+    const res  = await fetch('/api/history');
+    const data = await res.json();
+    renderHistory(data);
+  } catch (e) { console.error(e); }
+}
+
+function renderHistory(items) {
+  if (!items || !items.length) {
+    historyList.innerHTML = `<div style="text-align:center;padding:60px 0;color:var(--text3);font-size:13px;font-style:italic;">No harvested reels yet.</div>`;
+    return;
+  }
+  historyList.innerHTML = '';
+  
+  /* Show NEWEST pipelines at the TOP */
+  const reversedItems = items.slice().reverse();
+
+  reversedItems.forEach((item, displayIdx) => {
+    const originalIdx = items.length - 1 - displayIdx;
+    const el = document.createElement('div');
+    el.className = 'hist-item';
+    el.style.animationDelay = `${displayIdx * 0.05}s`;
+
+    let descText = item.caption || '';
+    if (!descText && item.resources) {
+      const v = item.resources.find(r => r.summary && r.summary.length > 30 && !r.summary.includes('Failed'));
+      if (v) descText = v.summary;
+    }
+
+    const descHtml = descText
+      ? `<p style="font-family:'Inter',sans-serif;font-size:14px;color:#FFFFFF;line-height:1.6;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;margin-bottom:12px;font-weight:500;" title="${descText.replace(/"/g,'&quot;')}">${descText}</p>`
+      : `<p style="font-family:'Inter',sans-serif;font-size:13px;color:#ECE2D6;margin-bottom:10px;font-weight:500;">No description provided.</p>`;
+
+    const avatarUrl = item.profile_pic || `/api/creator-avatar/${encodeURIComponent(item.creator || 'user')}`;
+    const displayUrl = (item.reel_url || '').split('?')[0];
+
+    const linksHtml = (item.resources && item.resources.length)
+      ? `<div style="border-top:1px solid rgba(240,210,170,0.18);padding-top:14px;margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+          ${item.resources.map(r=>`
+            <a href="${r.url}" target="_blank" class="resource-link-pill">
+              <span class="material-symbols-outlined" style="font-size:17px;color:#10B981;flex-shrink:0;">link</span>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Inter',sans-serif;font-size:14px;font-weight:700;color:#ECFDF5;">${r.title || r.url}</span>
+              <span class="material-symbols-outlined" style="font-size:14px;color:rgba(236,253,245,0.7);margin-left:auto;flex-shrink:0;">open_in_new</span>
+            </a>`).join('')}
+        </div>`
+      : `<p style="font-size:12px;color:#ECE2D6;border-top:1px solid var(--border);padding-top:10px;margin-top:8px;font-weight:500;">No links extracted</p>`;
+
+    el.innerHTML = `
+      <button class="del-btn" onclick="deleteItem(${originalIdx})" title="Remove">
+        <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+        <img src="${avatarUrl}" alt="${item.creator}" 
+             style="width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--terra);flex-shrink:0;background:#201C18;"
+             onerror="this.onerror=null;this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(item.creator || 'C')}&background=D4622A&color=fff';">
+        <span style="font-family:'Outfit','Inter',sans-serif;font-size:16px;font-weight:800;color:#FFFFFF;letter-spacing:-0.01em;">@${item.creator || 'unknown'}</span>
+      </div>
+      <a href="${item.reel_url}" target="_blank"
+         style="font-family:'Inter',sans-serif;font-size:14px;color:#FFA066;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:92%;margin-bottom:10px;font-weight:700;text-decoration:none;transition:all 0.15s;"
+         onmouseover="this.style.color='#FFFFFF';this.style.textDecoration='underline'" onmouseout="this.style.color='#FFA066';this.style.textDecoration='none'">
+        ${displayUrl}
+      </a>
+      ${descHtml}
+      ${linksHtml}
+    `;
+
+    historyList.appendChild(el);
+    addMiniTilt(el);
+  });
+}
+
+async function deleteItem(idx) {
+  if (!confirm('Remove this entry?')) return;
+  try {
+    const res  = await fetch(`/api/history/${idx}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.status === 'success') {
+      renderHistory(data.history);
+      downloadBtn.href = '/downloads/consolidated_report.pdf?t=' + Date.now();
+    } else { alert('Failed to delete'); }
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+fetchHistory();
+</script>
+</body>
+</html>

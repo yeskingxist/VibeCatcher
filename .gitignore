@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local Browser Session & Profiles (SECURITY: Keep cookies private!)
+browser_data/
+session.json
+
+# Temporary Downloads & PDFs
+downloads/
+*.pdf
+
+# Backups & Scratch Files
+backup_design/
+.system_generated/
+*.log
+
+# OS Generated
+.DS_Store
+Thumbs.db
