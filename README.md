@@ -25,19 +25,28 @@ Creator marketing & lead generation on Instagram requires commenting `"Link"`, `
 
 ## ⚡ Quick Start (One Command)
 
-### Windows (PowerShell / Command Prompt)
-
-Run this single command in your project directory:
+Copy and paste this **Single Line Command** into your PowerShell terminal:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File run.ps1
+git clone https://github.com/yeskingxist/VibeCatcher.git; cd VibeCatcher; .\run.ps1
 ```
 
-Or simply double-click **`run.bat`**!
+### 🛠️ Standard Step-by-Step Setup:
 
-> **What happens automatically:**
-> 1. Verifies Python 3.10+ environment.
-> 2. Auto-installs Python packages from `requirements.txt`.
+```bash
+# 1. Clone the repository
+git clone https://github.com/yeskingxist/VibeCatcher.git
+
+# 2. Enter project directory
+cd VibeCatcher
+
+# 3. Launch automated environment & dashboard
+.\run.ps1
+```
+
+> **What happens automatically when `run.ps1` executes:**
+> 1. Verifies Python 3.10+ installation.
+> 2. Installs required dependencies from `requirements.txt`.
 > 3. Installs Playwright Chromium browser binaries.
 > 4. Launches the VibeCatcher Dashboard on `http://127.0.0.1:8000` and opens your browser.
 
