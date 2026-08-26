@@ -1,7 +1,7 @@
 # VibeCatcher 🎯
 
 > **Automate Reel Comments, Click DM Buttons, Extract Hidden Resource Links.**
-> Turn Instagram Reels into structured, downloadable PDF intelligence reports automatically in sub-15 seconds.
+> Turn Instagram Reels into structured, downloadable PDF intelligence reports automatically in sub- min.
 
 [![Stars](https://img.shields.io/github/stars/yeskingxist/VibeCatcher?style=for-the-badge&logo=github&color=FF7F3E)](https://github.com/yeskingxist/VibeCatcher/stargazers)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -15,7 +15,7 @@
 
 Creator marketing & lead generation on Instagram requires commenting `"Link"`, `"Info"`, or `"PDF"` on Reels, waiting for automated DM replies, manually clicking interactive buttons, and copy-pasting resource links into notes.
 
-**VibeCatcher automates the entire end-to-end workflow in sub-15 seconds:**
+**VibeCatcher automates the entire end-to-end workflow in sub-min:**
 
 ```
 +-----------------------------------------------------------------------------------+
