@@ -188,19 +188,36 @@ class ReelHarvestPipeline:
                                     if not any(domain in target_url.lower() for domain in ["instagram.com", "facebook.com", "fb.com", "fbcdn.net"]):
                                         extracted_urls.append(target_url)
 
-                        # 4. Handle Postback Buttons (engagement/follow gates)
+                        # 4. Handle Postback & Interactive DM Buttons (ManyChat / Cosmofeed / Auto-Responders)
                         generic_xma_list = item.get('generic_xma', [])
                         for xma in generic_xma_list:
                             for btn in xma.get('cta_buttons', []):
-                                if btn.get('cta_type') == 'postback' or (not btn.get('action_url') and btn.get('title')):
-                                    btn_title = btn.get('title', '')
-                                    if btn_title and btn_title not in attempted_postbacks:
-                                        console.print(f"[cyan]Detected postback gate button: '{btn_title}'. Sending auto-reply to unlock...[/cyan]")
-                                        try:
-                                            auth_manager.client.direct_send(btn_title, thread_ids=[tid])
-                                            attempted_postbacks.add(btn_title)
-                                        except Exception as send_err:
-                                            console.print(f"[yellow]Failed to send postback reply: {send_err}[/yellow]")
+                                btn_title = btn.get('title', '') or btn.get('text', '')
+                                btn_action = btn.get('action_url', '') or btn.get('action_payload', '')
+                                
+                                if btn_title and btn_title not in attempted_postbacks:
+                                    console.print(f"[bold cyan][BUTTON DETECTED] Auto-clicking DM button: '{btn_title}'...[/bold cyan]")
+                                    attempted_postbacks.add(btn_title)
+                                    try:
+                                        # Method A: Send text trigger reply
+                                        auth_manager.client.direct_send(btn_title, thread_ids=[tid])
+                                        console.print(f"[green][OK] Clicked/Replied '{btn_title}' to trigger payload![/green]")
+                                    except Exception as send_err:
+                                        console.print(f"[yellow]Button reply note: {send_err}[/yellow]")
+                                    
+                                    # Method B: Direct Postback Endpoint Broadcast if action payload exists
+                                    try:
+                                        if btn_action or btn.get('cta_type') == 'postback':
+                                            auth_manager.client.private_request(
+                                                'direct_v2/threads/broadcast/postback/',
+                                                data={
+                                                    'thread_ids': f'[{tid}]',
+                                                    'postback_action_text': btn_title,
+                                                    'postback_action_payload': btn_action or btn_title
+                                                }
+                                            )
+                                    except Exception:
+                                        pass
 
                         # 3. Encoded URL Regex search in entire item string
                         item_str = str(item)
@@ -221,7 +238,7 @@ class ReelHarvestPipeline:
                 if extracted_urls:
                     break
                     
-                time.sleep(5.0) # Poll every 5 seconds
+                time.sleep(1.5) # Fast 1.5s polling for ~10-15s total execution
             
             # Step 5: Scrape Extracted Resources
             progress_cb(f"5/6: Found {len(extracted_urls)} link(s). Scraping resource contents...", 85)
