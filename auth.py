@@ -172,20 +172,29 @@ class AuthManager:
         return str(profile_dir)
 
     def auto_refresh_session(self) -> bool:
-        """Silently opens the persistent browser profile headlessly, extracts fresh sessionid."""
+        """Silently and automatically regenerates a fresh session token when expired."""
+        console.print("[cyan][AUTO-TOKEN] Checking token validity and refreshing automatically...[/cyan]")
+        
+        # 1. First Priority: Direct API login with saved credentials (Fast, 1-2s, headless)
+        creds = config.data.get("credentials")
+        if creds and creds.get("username") and creds.get("password"):
+            try:
+                console.print(f"[cyan][AUTO-TOKEN] Automatically fetching fresh token for @{creds['username']}...[/cyan]")
+                self.client = Client()
+                self._configure_client()
+                self.client.login(creds["username"], creds["password"])
+                self.save_session()
+                console.print("[bold green][AUTO-TOKEN] Successfully generated fresh session token via API![/bold green]")
+                return True
+            except Exception as e:
+                console.print(f"[yellow][AUTO-TOKEN] Direct credential login note: {e}[/yellow]")
+
+        # 2. Second Priority: Headless Persistent Browser One-Tap & Cookie Sync
         return self.refresh_from_persistent_browser()
 
     def login_via_persistent_browser(self, status_callback=None) -> bool:
-        """Opens a headed persistent browser for manual Instagram login.
-        
-        The browser profile is saved permanently in browser_data/ so Instagram
-        stays logged in across reboots. After user logs in, sessionid cookie is
-        extracted and fed to instagrapi.
-        
-        Args:
-            status_callback: Optional callable(msg, pct) for progress updates.
-        """
-        console.print("[yellow]Launching persistent browser for manual login...[/yellow]")
+        """Opens a headed persistent browser for manual Instagram login and intercepts credentials for future auto-refresh."""
+        console.print("[yellow]Launching persistent browser for login & token sync...[/yellow]")
         if status_callback:
             status_callback("Launching browser window...", 10)
         
@@ -194,7 +203,6 @@ class AuthManager:
             profile_dir = self._get_browser_profile_dir()
             
             with sync_playwright() as p:
-                # Persistent context = browser profile saved to disk permanently
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=profile_dir,
                     headless=False,
@@ -204,15 +212,37 @@ class AuthManager:
                 )
                 
                 page = context.pages[0] if context.pages else context.new_page()
+                
+                captured_username = None
+                captured_password = None
+
+                def on_request(req):
+                    nonlocal captured_username, captured_password
+                    try:
+                        if "login" in req.url.lower() and req.method == "POST" and req.post_data:
+                            import urllib.parse
+                            data = urllib.parse.parse_qs(req.post_data)
+                            if "username" in data and data["username"]:
+                                captured_username = data["username"][0]
+                            if "enc_password" in data and data["enc_password"]:
+                                parts = data["enc_password"][0].split(":")
+                                if len(parts) >= 4:
+                                    captured_password = ":".join(parts[3:])
+                            elif "password" in data and data["password"]:
+                                captured_password = data["password"][0]
+                    except Exception:
+                        pass
+
+                page.on("request", on_request)
                 page.goto("https://www.instagram.com/accounts/login/", timeout=60000)
                 
                 if status_callback:
                     status_callback("Browser opened — log in to your Instagram account.", 25)
-                console.print("[cyan]Browser opened — waiting for user to log in...[/cyan]")
+                console.print("[cyan]Browser opened — waiting for login to capture session token...[/cyan]")
                 
-                # Poll for sessionid cookie (max 5 minutes)
                 session_cookie = None
                 logged_in_username = None
+                
                 for i in range(600):
                     try:
                         if not context.pages:
@@ -220,11 +250,17 @@ class AuthManager:
                     except Exception:
                         break
                     
+                    # Try to capture inputs from the DOM if not intercepted via request
+                    try:
+                        if not captured_password:
+                            p_val = page.locator('input[name="password"]').input_value()
+                            u_val = page.locator('input[name="username"]').input_value()
+                            if p_val: captured_password = p_val
+                            if u_val: captured_username = u_val
+                    except Exception:
+                        pass
+
                     cookies = context.cookies()
-                    # Debug print
-                    if i % 10 == 0:
-                        console.print(f"DEBUG: Found {len(cookies)} cookies. Names: {[c['name'] for c in cookies]}")
-                        
                     for c in cookies:
                         if c["name"] == "sessionid" and c["value"]:
                             session_cookie = c["value"]
@@ -232,26 +268,13 @@ class AuthManager:
                     
                     if session_cookie:
                         if status_callback:
-                            status_callback("Login detected! Verifying account...", 70)
-                        console.print(f"[green]Login detected! (sessionid={session_cookie[:10]}...) Waiting 3 seconds...[/green]")
+                            status_callback("Login detected! Verifying token...", 70)
+                        console.print(f"[green]Login detected! (sessionid={session_cookie[:10]}...) Saving credentials...[/green]")
                         time.sleep(3)
-                        
-                        # Try to grab the logged-in username from the page
-                        try:
-                            # Re-read cookies after settling in case they refreshed
-                            cookies = context.cookies()
-                            for c in cookies:
-                                if c["name"] == "sessionid" and c["value"]:
-                                    session_cookie = c["value"]
-                                if c["name"] == "ds_user_id" and c["value"]:
-                                    pass  # user_id available if needed
-                        except Exception:
-                            pass
                         break
                     
                     time.sleep(0.5)
                 
-                # Close the browser window (profile stays on disk)
                 try:
                     context.close()
                 except Exception:
@@ -260,17 +283,23 @@ class AuthManager:
                 if session_cookie:
                     if status_callback:
                         status_callback("Session captured! Connecting to Instagram API...", 85)
-                    console.print(f"[bold green][OK] Session cookie captured from persistent browser![/bold green]")
+                    console.print("[bold green][OK] Session cookie captured from persistent browser![/bold green]")
+                    
+                    # Save intercepted credentials so future token refreshes happen 100% automatically
+                    if captured_username and captured_password:
+                        config.data["credentials"] = {"username": captured_username, "password": captured_password}
+                        config.save()
+                        console.print(f"[bold green][AUTO-TOKEN] Permanent credentials for @{captured_username} saved for zero-touch token refresh![/bold green]")
+                    
                     result = self.login_with_sessionid(session_cookie)
                     if result:
-                        # Resolve username
                         try:
                             res = self.client.private_request('accounts/current_user/?edit=true')
                             logged_in_username = res['user']['username']
                             self.client.username = logged_in_username
                             self.save_session()
                         except Exception:
-                            logged_in_username = "Connected"
+                            logged_in_username = captured_username or "Connected"
                         if status_callback:
                             status_callback(f"Connected as @{logged_in_username}!", 100)
                     return result
@@ -286,59 +315,81 @@ class AuthManager:
             return False
 
     def refresh_from_persistent_browser(self) -> bool:
-        """Headlessly opens the persistent browser profile and extracts a fresh sessionid.
-        
-        Since the user already logged in once via login_via_persistent_browser(),
-        Instagram auto-logs-in when the same profile is reopened. We just grab
-        the cookie and reconnect instagrapi.
-        """
+        """Headlessly opens the persistent browser profile, completes one-tap/login, and extracts fresh sessionid."""
         profile_dir = self._get_browser_profile_dir()
-        # Only attempt if profile exists with data
         if not Path(profile_dir).exists() or not any(Path(profile_dir).iterdir()):
             console.print("[yellow]No persistent browser profile found. Cannot auto-refresh.[/yellow]")
             return False
         
-        console.print("[yellow]Attempting silent session refresh from persistent browser profile...[/yellow]")
+        console.print("[yellow][AUTO-TOKEN] Attempting silent token extraction from persistent browser profile...[/yellow]")
         try:
             from playwright.sync_api import sync_playwright
+            creds = config.data.get("credentials") or {}
             
             with sync_playwright() as p:
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=profile_dir,
                     headless=True,
-                    viewport={"width": 420, "height": 780},
-                    user_agent="Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+                    viewport={"width": 1280, "height": 800},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                     args=["--disable-blink-features=AutomationControlled"],
                 )
                 
                 page = context.pages[0] if context.pages else context.new_page()
                 page.goto("https://www.instagram.com/", timeout=30000)
-                
-                # Wait for auto-login to resolve (max 15 seconds)
+                page.wait_for_timeout(2000)
+
+                # Check if Instagram shows a "Continue" one-tap button
+                try:
+                    continue_btn = page.locator('[role="button"]:has-text("Continue"), button:has-text("Continue")').first
+                    if continue_btn.is_visible():
+                        console.print("[cyan][AUTO-TOKEN] Clicking one-tap Continue button...[/cyan]")
+                        continue_btn.click()
+                        page.wait_for_timeout(3000)
+                except Exception:
+                    pass
+
+                # If Instagram asks for password and we have it, auto-fill it
+                try:
+                    pass_input = page.locator('input[name="password"]').first
+                    if pass_input.is_visible() and creds.get("password"):
+                        console.print("[cyan][AUTO-TOKEN] Auto-filling password modal...[/cyan]")
+                        pass_input.fill(creds["password"])
+                        login_btn = page.locator('[role="button"]:has-text("Log in"), button:has-text("Log in"), button[type="submit"]').first
+                        if login_btn.is_visible():
+                            login_btn.click()
+                            page.wait_for_timeout(5000)
+                except Exception:
+                    pass
+
+                # Extract sessionid cookie from all cookies
                 session_cookie = None
-                for _ in range(30):
-                    cookies = context.cookies("https://www.instagram.com")
+                for _ in range(20):
+                    cookies = context.cookies()
                     for c in cookies:
                         if c["name"] == "sessionid" and c["value"]:
                             session_cookie = c["value"]
                             break
                     if session_cookie:
                         break
-                    time.sleep(0.5)
-                
+                    page.wait_for_timeout(500)
+
                 try:
                     context.close()
                 except Exception:
                     pass
-                
+
                 if session_cookie:
-                    console.print("[bold green][OK] Fresh session ID extracted from persistent profile![/bold green]")
-                    return self.login_with_sessionid(session_cookie)
+                    console.print("[bold green][AUTO-TOKEN] Fresh session token extracted from browser profile![/bold green]")
+                    res = self.login_with_sessionid(session_cookie)
+                    if res:
+                        self.save_session()
+                    return res
                 else:
-                    console.print("[red]Auto-refresh failed: No sessionid in persistent profile (re-login may be needed).[/red]")
+                    console.print("[red][AUTO-TOKEN] Browser auto-refresh could not find valid sessionid.[/red]")
                     return False
         except Exception as e:
-            console.print(f"[red]Persistent browser refresh exception: {e}[/red]")
+            console.print(f"[red][AUTO-TOKEN] Exception during browser token refresh: {e}[/red]")
             return False
 
     def login_via_local_browser(self) -> bool:

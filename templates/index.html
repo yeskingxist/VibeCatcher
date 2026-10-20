@@ -826,9 +826,30 @@ p, span, h1, h2, h3, a, button, input, label {
       <!-- Connect Prompt -->
       <div id="connectPrompt" class="connect-prompt" style="display:none;">
         <button type="button" id="connectAccountBtn" class="btn-primary" style="width:100%;">
-          <span class="material-symbols-outlined" style="font-size:17px;">login</span>
-          Connect Instagram Account
+          <span class="material-symbols-outlined" style="font-size:17px;">open_in_browser</span>
+          Connect via Browser Window (Auto-Sync)
         </button>
+
+        <div style="text-align:center; margin:16px 0 12px; position:relative;">
+          <span style="background:var(--bg2); padding:0 14px; font-size:11px; color:var(--text3); font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">OR 100% Background Auto-Refresh</span>
+          <div style="position:absolute; top:50%; left:0; right:0; height:1px; background:rgba(240,210,170,0.12); z-index:-1;"></div>
+        </div>
+
+        <!-- Direct Login Form for Permanent Auto-Refresh -->
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(240,210,170,0.15); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; gap:10px;">
+            <input type="text" id="directUsername" class="field-input" placeholder="Instagram Username" style="flex:1; font-size:13px; padding:10px 14px;"/>
+            <input type="password" id="directPassword" class="field-input" placeholder="Instagram Password" style="flex:1; font-size:13px; padding:10px 14px;"/>
+          </div>
+          <button type="button" id="directLoginBtn" class="btn-secondary" style="width:100%; justify-content:center; font-weight:700; color:var(--terra);">
+            <span class="material-symbols-outlined" style="font-size:16px;">bolt</span>
+            Save Credentials & Auto-Authenticate
+          </button>
+          <p style="font-size:11px; color:var(--text3); line-height:1.4; margin:0;">
+            🛡️ Credentials are saved locally on your machine to automatically fetch a fresh session token whenever it expires.
+          </p>
+        </div>
+
         <div id="connectStatus" style="display:none; margin-top:16px;">
           <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
             <div class="spinner" id="connectSpinner"></div>
@@ -1198,7 +1219,48 @@ disconnectBtn.addEventListener('click', async () => {
     const res  = await fetch('/api/disconnect', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Failed');
-    checkAuthStatus();
+    const directLoginBtn = document.getElementById('directLoginBtn');
+if (directLoginBtn) {
+  directLoginBtn.addEventListener('click', async () => {
+    const username = document.getElementById('directUsername').value.trim();
+    const password = document.getElementById('directPassword').value.trim();
+    if (!username || !password) {
+      alert('Please enter both Instagram username and password.');
+      return;
+    }
+    directLoginBtn.disabled = true;
+    directLoginBtn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:1.5px;"></div> Authenticating…';
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      if (data.status === '2fa_required') {
+        const code = prompt('Two-Factor Authentication required. Enter the 6-digit verification code sent to your phone/authenticator app:');
+        if (code) {
+          const res2 = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, verification_code: code })
+          });
+          const data2 = await res2.json();
+          if (!res2.ok) throw new Error(data2.detail || '2FA verification failed');
+        }
+      }
+      checkAuthStatus();
+    } catch (err) {
+      alert('Login Error: ' + err.message);
+    } finally {
+      directLoginBtn.disabled = false;
+      directLoginBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;">bolt</span> Save Credentials & Auto-Authenticate';
+    }
+  });
+}
+
+checkAuthStatus();
   } catch (e) { alert('Error: ' + e.message); }
 });
 
