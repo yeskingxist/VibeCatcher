@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -7,6 +8,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 
 DOWNLOADS_DIR = Path(__file__).parent / "downloads"
 DOWNLOADS_DIR.mkdir(exist_ok=True)
+
+def safe_text(text: any) -> str:
+    """Escapes text for ReportLab XML/HTML-like rendering."""
+    if text is None:
+        return ""
+    return xml_escape(str(text))
 
 def generate_cumulative_pdf(pdf_filename: str, history_data: list) -> str:
     """
@@ -75,32 +82,34 @@ def generate_cumulative_pdf(pdf_filename: str, history_data: list) -> str:
         story.append(Paragraph("No Reel resources harvested yet.", body_style))
     else:
         for idx, entry in enumerate(history_data, 1):
-            creator = entry.get("creator", "Unknown")
-            reel_url = entry.get("reel_url", "N/A")
+            creator = safe_text(entry.get("creator", "Unknown"))
+            reel_url_raw = str(entry.get("reel_url", "N/A"))
+            reel_url_esc = safe_text(reel_url_raw)
             resources = entry.get("resources", [])
 
             # Reel Section Header
             story.append(Paragraph(f"Reel #{idx}: @{creator}", reel_header_style))
-            story.append(Paragraph(f"<b>Reel Link:</b> <a href='{reel_url}' color='#4f46e5'>{reel_url}</a>", body_style))
+            story.append(Paragraph(f"<b>Reel Link:</b> <a href='{reel_url_esc}' color='#4f46e5'>{reel_url_esc}</a>", body_style))
             story.append(HRFlowable(width="100%", thickness=0.8, color=colors.HexColor('#e2e8f0'), spaceAfter=10))
 
             if not resources:
                 story.append(Paragraph("No resources extracted for this Reel.", body_style))
             else:
                 for r_idx, res in enumerate(resources, 1):
-                    url = res.get("url", "N/A")
-                    title = res.get("title", f"Resource #{r_idx}")
-                    summary = res.get("summary", "No summary available.")
+                    raw_url = str(res.get("url", "N/A"))
+                    url_esc = safe_text(raw_url)
+                    title_esc = safe_text(res.get("title", f"Resource #{r_idx}"))
+                    summary_esc = safe_text(res.get("summary", "No summary available."))
                     snippets = res.get("snippets", [])
 
-                    story.append(Paragraph(f"<b>Resource {idx}.{r_idx}: {title}</b>", h2_style))
-                    story.append(Paragraph(f"<b>URL:</b> <a href='{url}' color='#2563eb'>{url}</a>", body_style))
-                    story.append(Paragraph(f"<b>Summary:</b> {summary}", body_style))
+                    story.append(Paragraph(f"<b>Resource {idx}.{r_idx}: {title_esc}</b>", h2_style))
+                    story.append(Paragraph(f"<b>URL:</b> <a href='{url_esc}' color='#2563eb'>{url_esc}</a>", body_style))
+                    story.append(Paragraph(f"<b>Summary:</b> {summary_esc}", body_style))
 
                     if snippets:
                         story.append(Paragraph("<b>Key Highlights:</b>", body_style))
                         for snip in snippets:
-                            story.append(Paragraph(f"• {snip}", body_style))
+                            story.append(Paragraph(f"• {safe_text(snip)}", body_style))
                     
                     story.append(Spacer(1, 4))
             
@@ -109,4 +118,3 @@ def generate_cumulative_pdf(pdf_filename: str, history_data: list) -> str:
 
     doc.build(story)
     return str(file_path.name)
-

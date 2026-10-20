@@ -1,8 +1,10 @@
 import time
 import re
+import json
+import urllib.parse
 import httpx
 from bs4 import BeautifulSoup
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 from rich.console import Console
 
 from auth import auth_manager
@@ -13,16 +15,139 @@ from pdf_builder import generate_cumulative_pdf
 
 console = Console(force_terminal=True)
 
+def clean_and_resolve_url(raw_url: Any) -> Optional[str]:
+    """Cleans, unwraps Instagram redirect shims, and validates external resource URLs."""
+    if not raw_url or not isinstance(raw_url, str):
+        return None
+    raw_url = raw_url.strip()
+    if raw_url.lower() in ('true', 'false', 'none', 'null', 'undefined', ''):
+        return None
+
+    # Handle percent-encoded URLs like https%3A%2F%2F...
+    if raw_url.startswith(('http%3A%2F%2F', 'https%3A%2F%2F')):
+        raw_url = urllib.parse.unquote(raw_url)
+
+    if not raw_url.startswith(('http://', 'https://')):
+        return None
+
+    # Handle Instagram / Facebook link redirect shims:
+    # e.g., https://l.instagram.com/?u=https%3A%2F%2Fdrive.google.com...
+    # or https://instagram.com/linkshim/?u=...
+    if any(shim in raw_url.lower() for shim in ('l.instagram.com', 'instagram.com/linkshim', 'l.facebook.com', 'facebook.com/l.php')):
+        try:
+            parsed = urllib.parse.urlparse(raw_url)
+            qs = urllib.parse.parse_qs(parsed.query)
+            for k in ('u', 'url', 'target', 'dest'):
+                if k in qs and qs[k]:
+                    return clean_and_resolve_url(qs[k][0])
+            match = re.search(r'[?&](?:u|url)=(https?(?:%3A%2F%2F|://)[^\s&"\'>]+)', raw_url)
+            if match:
+                return clean_and_resolve_url(urllib.parse.unquote(match.group(1)))
+        except Exception:
+            pass
+        return None
+
+    # Disallow internal Instagram/Facebook CDNs & posts/reels
+    lower = raw_url.lower()
+    disallowed = [
+        'cdninstagram.com', 'fbcdn.net',
+        'instagram.com/p/', 'instagram.com/reel/', 'instagram.com/stories/', 'instagram.com/tv/',
+        'facebook.com/tr/', 'threads.net/'
+    ]
+    if any(d in lower for d in disallowed):
+        return None
+
+    # Clean trailing punctuation
+    raw_url = raw_url.rstrip('.,;)>]"\'')
+    return raw_url
+
+def extract_urls_from_item(item: dict) -> List[str]:
+    """Extracts all candidate external URLs from any Instagram DM item."""
+    found = []
+
+    # 1. Plain text & Link objects
+    for text_val in [
+        item.get('text', ''),
+        item.get('link', {}).get('text', '') if isinstance(item.get('link'), dict) else '',
+        item.get('link', {}).get('link_context', {}).get('link_url', '') if isinstance(item.get('link'), dict) else ''
+    ]:
+        if text_val and isinstance(text_val, str):
+            for u in re.findall(r'https?://[^\s"\'\>\]\)]+', text_val):
+                res = clean_and_resolve_url(u)
+                if res:
+                    found.append(res)
+
+    # 2. Generic XMA & CTA Buttons
+    xma_sources = []
+    if isinstance(item.get('generic_xma'), list):
+        xma_sources.extend(item['generic_xma'])
+    elif isinstance(item.get('generic_xma'), dict):
+        xma_sources.append(item['generic_xma'])
+    if isinstance(item.get('xma'), list):
+        xma_sources.extend(item['xma'])
+    elif isinstance(item.get('xma'), dict):
+        xma_sources.append(item['xma'])
+
+    for xma in xma_sources:
+        if not isinstance(xma, dict):
+            continue
+        for target_field in ['target_url', 'preview_url', 'action_url']:
+            val = xma.get(target_field)
+            if val and isinstance(val, str):
+                res = clean_and_resolve_url(val)
+                if res:
+                    found.append(res)
+
+        # Buttons inside XMA
+        for btn in xma.get('cta_buttons', []):
+            if not isinstance(btn, dict):
+                continue
+            for btn_field in ['action_url', 'target_url', 'url', 'action_payload']:
+                val = btn.get(btn_field)
+                if val and isinstance(val, str):
+                    res = clean_and_resolve_url(val)
+                    if res:
+                        found.append(res)
+
+    # 3. Encoded URLs in entire item JSON/string
+    item_str = str(item)
+    for raw_m in re.findall(r'https?://[^\s"\'\>\]\)]+', item_str):
+        res = clean_and_resolve_url(raw_m)
+        if res:
+            found.append(res)
+    for enc_m in re.findall(r'https%3A%2F%2F[^\s"\'\>\]\)\&\\]+', item_str):
+        res = clean_and_resolve_url(urllib.parse.unquote(enc_m))
+        if res:
+            found.append(res)
+
+    # Deduplicate preserving order
+    seen = set()
+    cleaned = []
+    for u in found:
+        if u not in seen:
+            seen.add(u)
+            cleaned.append(u)
+    return cleaned
+
 class ReelHarvestPipeline:
     """End-to-end automation pipeline: Reel Watch -> Follow Creator -> Comment -> DM Capture -> Scrape -> PDF Summary."""
 
-    def scrape_url(self, url: str) -> Dict[str, Any]:
+    def scrape_url(self, url: str) -> Optional[Dict[str, Any]]:
         """Fetches and summarizes webpage content from extracted DM link."""
+        if not url or not isinstance(url, str) or not url.startswith(('http://', 'https://')):
+            return None
         try:
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            response = httpx.get(url, headers=headers, follow_redirects=True, timeout=10.0)
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+            response = httpx.get(url, headers=headers, follow_redirects=True, timeout=12.0)
+            final_url = str(response.url)
+            
             if response.status_code != 200:
-                return {"url": url, "title": "External Resource", "summary": f"HTTP {response.status_code}", "snippets": []}
+                return {
+                    "url": final_url,
+                    "title": "External Resource",
+                    "summary": f"Resource response code HTTP {response.status_code}",
+                    "snippets": []
+                }
 
             soup = BeautifulSoup(response.text, "html.parser")
             title = soup.title.string.strip() if soup.title and soup.title.string else "Extracted Resource"
@@ -31,16 +156,21 @@ class ReelHarvestPipeline:
             paragraphs = [p.get_text().strip() for p in soup.find_all("p") if len(p.get_text().strip()) > 30]
             snippets = paragraphs[:5] # Top highlights
             
-            summary = " ".join(paragraphs[:3])[:300] + "..." if paragraphs else "Resource content parsed."
+            summary = " ".join(paragraphs[:3])[:300] + "..." if paragraphs else "Resource link successfully retrieved."
 
             return {
-                "url": url,
+                "url": final_url,
                 "title": title,
                 "summary": summary,
                 "snippets": snippets
             }
         except Exception as e:
-            return {"url": url, "title": "Resource Page", "summary": f"Failed to fetch content: {str(e)}", "snippets": []}
+            return {
+                "url": url,
+                "title": "Resource Page",
+                "summary": f"Resource captured ({str(e)[:120]})",
+                "snippets": []
+            }
 
     def process_reel(self, reel_url: str, comment_text: str, progress_cb: Callable[[str, int], None]) -> Dict[str, Any]:
         """
@@ -118,7 +248,6 @@ class ReelHarvestPipeline:
             attempted_postbacks = set()
             start_time = time.time()
             max_wait = 40  # 40 seconds timer
-            
             tid = None
             
             while time.time() - start_time < max_wait:
@@ -128,7 +257,7 @@ class ReelHarvestPipeline:
                 try:
                     items = []
                     
-                    # 1. If we already resolved a tid, try to fetch its messages
+                    # 1. If we already resolved a tid, try to fetch its latest messages
                     if tid:
                         try:
                             raw_thread = auth_manager.client.private_request(f'direct_v2/threads/{tid}/?limit=20')
@@ -136,97 +265,123 @@ class ReelHarvestPipeline:
                         except Exception:
                             tid = None  # Reset if thread became inaccessible
                     
-                    # 2. If no tid or no items, scan active inbox first (prioritizing new active threads)
+                    # 2. If no tid or no items, scan active primary inbox first
                     if not tid or not items:
-                        raw_inbox = auth_manager.client.private_request('direct_v2/inbox/?limit=10')
-                        threads = raw_inbox.get('inbox', {}).get('threads', [])
-                        for t in threads:
-                            if any(u.get('username', '').lower() == creator_username.lower() or str(u.get('pk')) == str(creator.pk) for u in t.get('users', [])):
-                                tid = t.get('thread_id')
-                                items = t.get('items', [])
-                                break
+                        try:
+                            raw_inbox = auth_manager.client.private_request('direct_v2/inbox/?limit=10')
+                            threads = raw_inbox.get('inbox', {}).get('threads', [])
+                            for t in threads:
+                                if any(u.get('username', '').lower() == creator_username.lower() or str(u.get('pk')) == str(creator.pk) for u in t.get('users', [])):
+                                    tid = t.get('thread_id')
+                                    items = t.get('items', [])
+                                    break
+                        except Exception:
+                            pass
+
+                    # 3. Check Pending Inbox (Message Requests) in case creator bot routed there
+                    if not tid or not items:
+                        try:
+                            raw_pending = auth_manager.client.private_request('direct_v2/pending_inbox/?limit=10')
+                            pending_threads = raw_pending.get('inbox', {}).get('threads', [])
+                            for pt in pending_threads:
+                                if any(u.get('username', '').lower() == creator_username.lower() or str(u.get('pk')) == str(creator.pk) for u in pt.get('users', [])):
+                                    tid = pt.get('thread_id')
+                                    # Approve pending thread to ensure messages are accessible
+                                    try:
+                                        auth_manager.client.direct_pending_approve(tid)
+                                    except Exception:
+                                        pass
+                                    items = pt.get('items', [])
+                                    break
+                        except Exception:
+                            pass
                     
-                    # 3. Fallback to direct thread by participants if still not found
+                    # 4. Fallback to direct thread by participants
                     if not tid:
-                        thread_data = auth_manager.client.direct_thread_by_participants([creator.pk])
-                        thread_info = thread_data.get('thread', thread_data) if isinstance(thread_data, dict) else {}
-                        tid = thread_info.get('thread_id')
-                        if tid:
-                            raw_thread = auth_manager.client.private_request(f'direct_v2/threads/{tid}/?limit=20')
-                            items = raw_thread.get('thread', {}).get('items', [])
+                        try:
+                            thread_data = auth_manager.client.direct_thread_by_participants([creator.pk])
+                            thread_info = thread_data.get('thread', thread_data) if isinstance(thread_data, dict) else {}
+                            tid = thread_info.get('thread_id')
+                            if tid:
+                                raw_thread = auth_manager.client.private_request(f'direct_v2/threads/{tid}/?limit=20')
+                                items = raw_thread.get('thread', {}).get('items', [])
+                        except Exception:
+                            pass
 
                     for item in items:
                         # Filter out messages sent by viewer (us)
                         if item.get('is_sent_by_viewer') is True:
                             continue
 
-                        # 1. Plain text regex
-                        text = item.get('text', '')
-                        if text:
-                            urls = re.findall(r'https?://[^\s"\'\>\]\)]+', text)
-                            for u in urls:
-                                if not any(domain in u.lower() for domain in ["instagram.com", "facebook.com", "fb.com", "fbcdn.net"]):
-                                    extracted_urls.append(u)
+                        # Extract any valid URLs from this message
+                        item_urls = extract_urls_from_item(item)
+                        for u in item_urls:
+                            if u not in extracted_urls:
+                                extracted_urls.append(u)
+                                console.print(f"[bold green][URL EXTRACTED] Found resource link: {u}[/bold green]")
 
-                        # 2. CTA Buttons (ManyChat / Cosmofeed Auto-Responder)
-                        generic_xma_list = item.get('generic_xma', [])
-                        for xma in generic_xma_list:
-                            for btn in xma.get('cta_buttons', []):
-                                action_url = btn.get('action_url', '')
-                                if action_url:
-                                    # Extract nested target URL (e.g. url=https%3A%2F%2Fdrive.google.com...)
-                                    if 'url=' in action_url:
-                                        raw_target = action_url.split('url=')[-1]
-                                        import urllib.parse
-                                        unquoted = urllib.parse.unquote(raw_target)
-                                        # Clean tracking query params if needed
-                                        clean_url = unquoted.split('&')[0] if '&' in unquoted else unquoted
-                                        target_url = clean_url
-                                    else:
-                                        target_url = action_url
-                                        
-                                    if not any(domain in target_url.lower() for domain in ["instagram.com", "facebook.com", "fb.com", "fbcdn.net"]):
-                                        extracted_urls.append(target_url)
+                        # Handle Interactive CTA Buttons / Postbacks (ManyChat / Cosmofeed / Auto-Responders)
+                        xma_sources = []
+                        if isinstance(item.get('generic_xma'), list):
+                            xma_sources.extend(item['generic_xma'])
+                        elif isinstance(item.get('generic_xma'), dict):
+                            xma_sources.append(item['generic_xma'])
+                        if isinstance(item.get('xma'), list):
+                            xma_sources.extend(item['xma'])
+                        elif isinstance(item.get('xma'), dict):
+                            xma_sources.append(item['xma'])
 
-                        # 4. Handle Postback & Interactive DM Buttons (ManyChat / Cosmofeed / Auto-Responders)
-                        generic_xma_list = item.get('generic_xma', [])
-                        for xma in generic_xma_list:
+                        for xma in xma_sources:
+                            if not isinstance(xma, dict):
+                                continue
                             for btn in xma.get('cta_buttons', []):
+                                if not isinstance(btn, dict):
+                                    continue
                                 btn_title = btn.get('title', '') or btn.get('text', '')
-                                btn_action = btn.get('action_url', '') or btn.get('action_payload', '')
-                                
-                                if btn_title and btn_title not in attempted_postbacks:
+                                btn_payload = btn.get('action_payload', '') or btn.get('action_url', '')
+
+                                # Direct check: Does the button have a direct destination URL?
+                                btn_url = (clean_and_resolve_url(btn.get('action_url')) or 
+                                           clean_and_resolve_url(btn.get('target_url')) or 
+                                           clean_and_resolve_url(btn.get('url')))
+                                if btn_url and btn_url not in extracted_urls:
+                                    extracted_urls.append(btn_url)
+                                    console.print(f"[bold green][BUTTON URL CAPTURED] '{btn_title}': {btn_url}[/bold green]")
+
+                                # If it's an unclicked postback button, trigger it properly
+                                elif btn_title and btn_title not in attempted_postbacks:
                                     console.print(f"[bold cyan][BUTTON DETECTED] Auto-clicking DM button: '{btn_title}'...[/bold cyan]")
                                     attempted_postbacks.add(btn_title)
-                                    try:
-                                        # Method A: Send text trigger reply
-                                        auth_manager.client.direct_send(btn_title, thread_ids=[tid])
-                                        console.print(f"[green][OK] Clicked/Replied '{btn_title}' to trigger payload![/green]")
-                                    except Exception as send_err:
-                                        console.print(f"[yellow]Button reply note: {send_err}[/yellow]")
                                     
-                                    # Method B: Direct Postback Endpoint Broadcast if action payload exists
+                                    # Method A: Instagram Native Postback Broadcast
                                     try:
-                                        if btn_action or btn.get('cta_type') == 'postback':
-                                            auth_manager.client.private_request(
-                                                'direct_v2/threads/broadcast/postback/',
-                                                data={
-                                                    'thread_ids': f'[{tid}]',
-                                                    'postback_action_text': btn_title,
-                                                    'postback_action_payload': btn_action or btn_title
-                                                }
-                                            )
-                                    except Exception:
-                                        pass
-
-                        # 3. Encoded URL Regex search in entire item string
-                        item_str = str(item)
-                        encoded_matches = re.findall(r'https%3A%2F%2F[^\s"\'\>\]\)\&\\]+', item_str)
-                        for em in encoded_matches:
-                            import urllib.parse
-                            decoded = urllib.parse.unquote(em)
-                            if not any(cdn in decoded for cdn in ["cdninstagram.com", "fbcdn.net", "instagram.com/reel"]):
-                                extracted_urls.append(decoded)
+                                        token = auth_manager.client.generate_mutation_token()
+                                        pb_kwargs = {
+                                            "action": "send_item",
+                                            "thread_ids": json.dumps([int(tid)]) if tid else "[]",
+                                            "client_context": token,
+                                            "mutation_token": token,
+                                            "device_id": getattr(auth_manager.client, 'android_device_id', None) or auth_manager.client.generate_uuid(),
+                                            "_uuid": auth_manager.client.uuid,
+                                            "postback_action_text": btn_title,
+                                            "postback_action_payload": btn_payload or btn_title,
+                                            "nav_chain": "1qT:feed_timeline:1,7Az:direct_inbox:4,5rG:direct_thread:7",
+                                            "offline_threading_id": token,
+                                        }
+                                        auth_manager.client.private_request(
+                                            'direct_v2/threads/broadcast/postback/',
+                                            data=auth_manager.client.with_default_data(pb_kwargs),
+                                            with_signature=False
+                                        )
+                                        console.print(f"[green][OK] Triggered postback for '{btn_title}'![/green]")
+                                    except Exception as pb_err:
+                                        console.print(f"[yellow]Postback broadcast note: {pb_err}[/yellow]")
+                                        # Method B: Quick-Reply Text fallback
+                                        try:
+                                            auth_manager.client.direct_send(btn_title, thread_ids=[tid])
+                                            console.print(f"[green][OK] Sent quick-reply text '{btn_title}'[/green]")
+                                        except Exception:
+                                            pass
 
                     extracted_urls = list(set(extracted_urls))
                     if extracted_urls:
@@ -238,19 +393,33 @@ class ReelHarvestPipeline:
                 if extracted_urls:
                     break
                     
-                time.sleep(1.5) # Fast 1.5s polling for ~10-15s total execution
-            
+                time.sleep(1.5) # Fast 1.5s polling loop
+
+            # Fallback Check: Creator Profile Bio Link (If DM did not yield links)
+            if not extracted_urls:
+                progress_cb("Checking creator profile bio link as fallback...", 82)
+                try:
+                    u_info = auth_manager.client.user_info(creator.pk)
+                    bio_link = getattr(u_info, 'external_url', '') or ''
+                    if bio_link:
+                        clean_bio = clean_and_resolve_url(bio_link)
+                        if clean_bio:
+                            console.print(f"[bold cyan][BIO LINK CAPTURED] Creator bio link fallback: {clean_bio}[/bold cyan]")
+                            extracted_urls.append(clean_bio)
+                except Exception as bio_err:
+                    console.print(f"[yellow]Bio link fallback note: {bio_err}[/yellow]")
+
             # Step 5: Scrape Extracted Resources
             progress_cb(f"5/6: Found {len(extracted_urls)} link(s). Scraping resource contents...", 85)
             resources_data = []
             for url in extracted_urls:
                 data = self.scrape_url(url)
-                resources_data.append(data)
+                if data:
+                    resources_data.append(data)
 
             # Step 6: Maintain Cumulative JSON History & Generate Consolidated PDF Document
             progress_cb("6/6: Updating Cumulative History & PDF Document...", 95)
             
-            import json
             from pathlib import Path
             history_file = Path(__file__).parent / "history.json"
             
