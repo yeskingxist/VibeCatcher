@@ -56,6 +56,24 @@ class AuthManager:
                     return True
         return False
 
+    def is_session_valid(self) -> bool:
+        """Actively checks if Instagram accepts our current session credentials."""
+        if not hasattr(self, 'client') or not self.client or not self.client.user_id:
+            return False
+        try:
+            res = self.client.private_request('accounts/current_user/?edit=true')
+            user_info = res.get('user', {})
+            username = user_info.get('username')
+            if username:
+                self.client.username = username
+                return True
+            return False
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(k in err_str for k in ['login_required', '403', 'unauthorized', 'redirect', 'checkpoint']):
+                return False
+            return bool(self.client.user_id)
+
     def save_session(self):
         """Saves current session settings to session.json."""
         try:

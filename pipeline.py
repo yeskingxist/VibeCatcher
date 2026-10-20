@@ -177,13 +177,29 @@ class ReelHarvestPipeline:
         Executes the full automated workflow.
         progress_cb(step_message, percentage) updates UI in real-time.
         """
-        if not auth_manager.load_session():
-            raise Exception("Instagram login required. Please authenticate CLI first.")
+        # Step 0: Ensure session is authenticated and valid
+        if not auth_manager.load_session() or not auth_manager.is_session_valid():
+            progress_cb("Verifying Instagram session...", 5)
+            refreshed = auth_manager.auto_refresh_session()
+            if not refreshed or not auth_manager.is_session_valid():
+                auth_manager.disconnect()
+                raise Exception("Instagram session has expired! Please click 'Connect Instagram Account' in the dashboard to reconnect.")
 
         # Step 1: Resolving Reel & Media Info
         progress_cb("1/6: Resolving Reel & Simulating Watch Time...", 10)
         media_id = reel_manager.extract_media_id(reel_url)
-        media_info = auth_manager.client.media_info(media_id)
+        try:
+            media_info = auth_manager.client.media_info(media_id)
+        except Exception as media_err:
+            err_msg = str(media_err).lower()
+            if any(k in err_msg for k in ['redirect', 'login_required', 'unauthorized', '403', 'checkpoint']):
+                if auth_manager.auto_refresh_session() and auth_manager.is_session_valid():
+                    media_info = auth_manager.client.media_info(media_id)
+                else:
+                    auth_manager.disconnect()
+                    raise Exception("Instagram session has expired! Please click 'Connect Instagram Account' in the dashboard to reconnect.")
+            else:
+                raise Exception(f"Failed to fetch Reel details: {media_err}")
         creator = media_info.user
         creator_username = creator.username
         raw_caption = getattr(media_info, 'caption_text', '') or ''

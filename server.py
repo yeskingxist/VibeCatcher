@@ -55,22 +55,18 @@ class LoginRequest(BaseModel):
 @app.get("/api/auth-status")
 def auth_status_api():
     from auth import auth_manager
-    is_logged_in = auth_manager.load_session()
-    user = auth_manager.client.username if is_logged_in else None
+    if not auth_manager.load_session():
+        return {"authenticated": False, "username": None}
     
-    if is_logged_in and (not user or user == "Connected"):
-        import logging
-        auth_manager.client.request_logger.setLevel(logging.WARNING)
-        try:
-            res = auth_manager.client.private_request('accounts/current_user/?edit=true')
-            user = res['user']['username']
-            auth_manager.client.username = user
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            user = "Connected"
-            
-    if is_logged_in and user and user != "Connected":
+    # Actively verify session validity
+    if not auth_manager.is_session_valid():
+        # Try headless auto-refresh from browser profile if available
+        if not (auth_manager.auto_refresh_session() and auth_manager.is_session_valid()):
+            auth_manager.disconnect()
+            return {"authenticated": False, "username": None, "expired": True}
+    
+    user = auth_manager.client.username or "Connected"
+    if user != "Connected":
         try:
             avatar_dir = BASE_DIR / "static" / "avatars"
             avatar_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +82,7 @@ def auth_status_api():
         except Exception:
             pass
 
-    return {"authenticated": is_logged_in, "username": user}
+    return {"authenticated": True, "username": user}
 
 @app.get("/api/creator-avatar/{username}")
 def get_creator_avatar_api(username: str):
